@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: food-app-prod
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: food-app-dev
