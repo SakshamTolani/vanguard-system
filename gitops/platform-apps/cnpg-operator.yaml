@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cnpg-operator
+  namespace: argocd
+  annotations:
+    # Wave 0: operators install CRDs that everything else depends on.
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+
+  sources:
+    - repoURL: https://cloudnative-pg.github.io/charts
+      chart: cloudnative-pg
+      targetRevision: 0.28.2           # PIN. Bump deliberately, never use "*".
+      helm:
+        valueFiles:
+          - $values/platform/cnpg-operator/values.yaml
+
+    - repoURL: https://github.com/SakshamTolani/vanguard-system.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+
+  syncPolicy:
+    automated:
+      prune: true                       # Delete the file → ArgoCD deletes the chart.
+      selfHeal: true
+
+    syncOptions:
+      # Create cnpg-system namespace on first sync.
+      - CreateNamespace=true
+      # ServerSideApply avoids the "metadata.annotations too long" error
+      # that CRD-heavy charts (CNPG, Strimzi) trigger with client-side apply.
+      - ServerSideApply=true
+      # Wait for CRDs to be Established before syncing dependent waves.
+      # Without this, wave 1's `Cluster` resource can race the CRD install.
+      - SkipDryRunOnMissingResource=true
+    

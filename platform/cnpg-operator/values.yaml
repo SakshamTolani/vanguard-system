@@ -1,0 +1,18 @@
+
+resources:
+  # If you want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  #
+  limits:
+    cpu: 100m
+    memory: 64Mi
+  requests:
+    cpu: 100m
+    memory: 50Mi
+
+# Monitoring is intentionally OFF for now.
+# The chart can create a PodMonitor for Prometheus/VM scraping, but that CRD
+# isn't installed in our cluster yet. We'll flip this to true when the
+# VictoriaMetrics operator (or a vmagent with a PodMonitor CRD) is in place.
+monitoring:
+  podMonitorEnabled: false
