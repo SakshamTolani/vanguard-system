@@ -1,0 +1,53 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Values for the VictoriaMetrics Operator chart.
+#
+# Chart source:    https://github.com/VictoriaMetrics/helm-charts/tree/master/charts/victoria-metrics-operator
+# Upstream values: helm show values vm/victoria-metrics-operator --version 0.63.1
+#
+# What this chart installs:
+#   - The VM operator (a controller-loop process watching for VM CRs).
+#   - 24 CRDs (VMSingle, VMAgent, VMServiceScrape, VMRule, VMAlert, etc.).
+#
+# What this chart does NOT install:
+#   - Any actual VictoriaMetrics database. That's a VMSingle CR we'll write
+#     separately, applied in wave 1 alongside Loki.
+#
+# Architectural choices documented in header rather than values:
+#   - replicaCount: 1 (chart default) — single replica is fine for learning.
+#   - watchNamespaces: empty (chart default) — operator watches all namespaces.
+#   - Image, RBAC, service account — chart defaults are correct.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── Webhook disabled ─────────────────────────────────────────────────────────
+# The chart's admission webhook validates CR submissions at apply time, but
+# requires TLS certs. Without cert-manager installed (we don't have it), the
+# webhook needs either chart-generated certs (handling unclear at this version)
+# or a manually-managed Secret. For a learning cluster, we don't need webhook
+# validation — the controller will still reject invalid CRs at reconcile time,
+# just with slightly less friendly errors.
+#
+# To re-enable later: install cert-manager as a platform component, then set:
+#   admissionWebhooks:
+#     enabled: true
+#     certManager:
+#       enabled: true
+admissionWebhooks:
+  enabled: false
+
+# ─── Resource sizing ──────────────────────────────────────────────────────────
+# This is a Go controller loop, like CNPG operator. Idle is tiny; reconciliation
+# bursts modest. Chart defaults are sized for prod fleets; we trim for kind.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    # No CPU limit — controllers should burst freely during reconciliation.
+    memory: 256Mi
+
+# ─── Service monitoring disabled ──────────────────────────────────────────────
+# The chart can create a ServiceMonitor (Prometheus Operator CRD) or
+# VMServiceScrape (VM Operator CRD) for self-monitoring. We'll add scraping
+# later via an explicit VMServiceScrape CR in wave 1, after VMSingle exists.
+serviceMonitor:
+  enabled: false

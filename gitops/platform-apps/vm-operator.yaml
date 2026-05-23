@@ -1,0 +1,43 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# ArgoCD Application: vm-operator
+#
+# Deploys the VictoriaMetrics Operator. Installs 24 CRDs that wave 1 will
+# consume — VMSingle (the metrics database), VMAgent (the scraper),
+# VMServiceScrape (declarative scrape targets), and others.
+#
+# Sync wave 0: operators installing CRDs come before anything that uses them.
+# Pattern mirrors cnpg-operator exactly.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vm-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+
+  sources:
+    - repoURL: https://victoriametrics.github.io/helm-charts/
+      chart: victoria-metrics-operator
+      targetRevision: 0.63.1
+      helm:
+        valueFiles:
+          - $values/platform/vm-operator/values.yaml
+
+    - repoURL: https://github.com/SakshamTolani/vanguard-system.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vm-operator-system
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
