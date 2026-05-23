@@ -1,0 +1,44 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# ArgoCD Application: loki
+#
+# Deploys Loki in SingleBinary mode as the cluster's log store.
+# Loki is one of three observability sinks (Loki for logs, Tempo for traces,
+# VictoriaMetrics for metrics). All three are wave 1 — they have no platform
+# dependencies, and wave 2 components (OTEL collector, Grafana) consume them.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+  annotations:
+    # Wave 1: observability sinks. Comes after operators (wave 0) so PVC
+    # provisioning works, and before consumers (wave 2) so OTEL collector
+    # and Grafana have something to point at.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: loki
+      targetRevision: 13.1.2              # PIN. Verify with `helm search repo`.
+      helm:
+        valueFiles:
+          - $values/platform/loki/values.yaml
+
+    - repoURL: https://github.com/SakshamTolani/vanguard-system.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

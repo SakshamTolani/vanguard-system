@@ -1,0 +1,129 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Values for the Grafana Loki chart.
+#
+# Chart source:    https://github.com/grafana/loki/tree/main/production/helm/loki
+# Upstream values: helm show values grafana/loki --version <pinned>
+#
+# What this chart installs (with our overrides):
+#   - One Loki pod running in SingleBinary mode.
+#   - A PVC for log chunks and index.
+#
+# What this chart does NOT install (we explicitly disable):
+#   - loki-gateway (nginx in front of Loki) — not needed for a single-tenant
+#     in-cluster store. Adds another pod, another failure surface.
+#   - loki-canary (synthetic log generator) — useful for SLO monitoring of
+#     production Loki, irrelevant for a learning cluster.
+#   - chunksCache / resultsCache (memcached pods) — premature for our volume.
+#
+# What this chart does NOT install (architectural choice):
+#   - A log shipper. Loki is just storage. Logs will arrive from the OTEL
+#     collector when wave 2 lands. Until then, Loki will be running and empty.
+#     Verify health with /ready; do not expect logs to appear yet.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── Deployment topology ──────────────────────────────────────────────────────
+# SingleBinary: one pod, all Loki components as goroutines in one process.
+# See the discussion on SimpleScalable / Distributed in the design notes —
+# those require object storage and are unnecessary at our scale.
+deploymentMode: SingleBinary
+
+singleBinary:
+  replicas: 1
+
+  # Persistence for the single Loki pod.
+  # kind's default storage class is `standard` (local-path-provisioner).
+  # 10 GiB is ~100x our expected 30-day footprint; pick generous, no S3 to bill.
+  persistence:
+    enabled: true
+    size: 10Gi
+    # Omit storageClass to inherit the cluster default. Set explicitly if you
+    # ever want to pin to a specific class (e.g. fast-ssd in real clusters).
+
+   # Modest resource sizing for a single-tenant low-volume learning cluster.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+# Disable the read/write/backend pod groups — they only apply to SimpleScalable.
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+# ─── Disable bundled extras ───────────────────────────────────────────────────
+# Each of these adds pods we don't need at this scale.
+gateway:
+  enabled: false
+
+lokiCanary:
+  enabled: false
+
+chunksCache:
+  enabled: false
+
+resultsCache:
+  enabled: false
+
+# Test pod the chart installs to verify the deployment. Useful in CI, noise here.
+test:
+  enabled: false
+
+# ─── Loki core configuration ──────────────────────────────────────────────────
+# This block becomes Loki's loki-config.yaml inside the pod.
+loki:
+  # Single-tenant mode. No X-Scope-OrgID header required.
+  # See discussion in design notes — default behaviour is mode-dependent and
+  # easy to get wrong; setting it explicitly here documents the intent.
+  auth_enabled: false
+
+  # Storage backend: local filesystem on the persistent volume.
+  # Object-store backends (s3, gcs, azure) are required for SimpleScalable
+  # and Distributed; not needed here.
+  storage:
+    type: filesystem
+    filesystem:
+      chunks_directory: /var/loki/chunks
+      rules_directory: /var/loki/rules
+
+  # commonConfig is shared by all Loki components. path_prefix tells Loki
+  # where its on-disk state lives; replication_factor=1 because we have
+  # one ingester (SingleBinary).
+  commonConfig:
+    path_prefix: /var/loki
+    replication_factor: 1
+
+  # Schema configuration. The chart's default schemaConfig has historically
+  # been a source of confusion (wrong `from:` dates, outdated schema versions).
+  # Setting it explicitly to a known-good current schema (v13 + tsdb) avoids
+  # silent write failures.
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+  # Retention is enforced by the compactor (which runs inside the
+  # SingleBinary pod). Two things are needed:
+  #   1. Tell the compactor to delete expired data.
+  #   2. Tell Loki how long to keep data via limits_config.
+  limits_config:
+    retention_period: 720h    # 30 days
+
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+    working_directory: /var/loki/compactor
+
+  # Disable analytics phone-home to Grafana Labs. We're a learning cluster;
+  # no need to report usage stats upstream.
+  analytics:
+    reporting_enabled: false
