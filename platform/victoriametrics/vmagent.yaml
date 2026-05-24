@@ -1,0 +1,38 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# VMAgent CR — the metrics scraper.
+#
+# vmagent is the Prometheus-equivalent scrape-and-forward component.
+# It scrapes /metrics endpoints (defined via VMServiceScrape CRs) on a
+# schedule, and remote-writes the data to vmsingle.
+#
+# The operator creates a Deployment for vmagent. VMServiceScrape CRs in
+# the cluster are discovered automatically — vmagent will reload its
+# scrape config when new ones are added.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMAgent
+metadata:
+  name: vmagent
+  namespace: observability
+spec:
+  # Forward all scraped metrics to vmsingle via remote-write.
+  # The URL is the vmsingle Service's in-cluster DNS name.
+  # Service naming follows operator convention: vmsingle-<cr-name>.
+  remoteWrite:
+    - url: "http://vmsingle-vmsingle.observability.svc.cluster.local:8429/api/v1/write"
+
+  # Discover ALL VMServiceScrape / VMPodScrape CRs in any namespace.
+  # Without this, vmagent only sees CRs in its own namespace.
+  selectAllByDefault: true
+
+  # Scrape interval — how often vmagent hits each /metrics endpoint.
+  # 30s is a sane default; balances data resolution with load on targets.
+  scrapeInterval: "30s"
+
+  # Resource sizing. vmagent is light — mostly HTTP requests + remote-write batching.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi

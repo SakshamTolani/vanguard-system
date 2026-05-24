@@ -1,38 +1,35 @@
 # ──────────────────────────────────────────────────────────────────────────────
-# ArgoCD Application: vm-operator
+# ArgoCD Application: victoriametrics
 #
-# Deploys the VictoriaMetrics Operator. Installs 24 CRDs that wave 1 will
-# consume — VMSingle (the metrics database), VMAgent (the scraper),
-# VMServiceScrape (declarative scrape targets), and others.
+# Applies VMSingle (the database), VMAgent (the scraper), and VMServiceScrape
+# CRs (the scrape targets). All managed by vm-operator (wave 0).
 #
-# Sync wave 0: operators installing CRDs come before anything that uses them.
-# Pattern mirrors cnpg-operator exactly.
+# Wave 1: this Application produces the metrics sink that wave 2 components
+# (OTEL collector, Grafana) will consume.
+#
+# Pattern: source.path points at a directory; ArgoCD applies every YAML in it.
+# Same approach as platform-root's app-of-apps.
 # ──────────────────────────────────────────────────────────────────────────────
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: vm-operator
+  name: victoriametrics
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   project: default
 
-  sources:
-    - repoURL: https://victoriametrics.github.io/helm-charts/
-      chart: victoria-metrics-operator
-      targetRevision: 0.63.1
-      helm:
-        valueFiles:
-          - $values/platform/vm-operator/values.yaml
-
-    - repoURL: https://github.com/SakshamTolani/vanguard-system.git
-      targetRevision: main
-      ref: values
+  source:
+    repoURL: https://github.com/SakshamTolani/vanguard-system.git
+    targetRevision: main
+    path: platform/victoriametrics
+    directory:
+      recurse: true
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: vm-operator-system
+    namespace: observability
 
   syncPolicy:
     automated:

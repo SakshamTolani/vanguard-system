@@ -1,0 +1,37 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# VMSingle CR — the actual VictoriaMetrics database.
+#
+# Managed by vm-operator. The operator reacts to this CR by creating:
+#   - A StatefulSet running the victoria-metrics binary.
+#   - A PVC for time-series data.
+#   - A Service named vmsingle-vmsingle (or similar — operator naming).
+#
+# This is the metrics sink. OTEL collector (wave 2) will remote-write to it.
+# Grafana (wave 2) will query it as a Prometheus-compatible datasource.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMSingle
+metadata:
+  name: vmsingle
+  namespace: observability
+spec:
+  # Retention. Duration suffixes: 'd', 'w', 'y' (no 'm' for months).
+  retentionPeriod: "30d"
+
+  # Persistent storage. Inherits the cluster's default StorageClass (kind's
+  # local-path-provisioner). Same 10Gi size as Loki — generous headroom.
+  storage:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 10Gi
+
+  # Resource sizing for the actual vmsingle pod.
+  # VM is dense — these limits are enough for thousands of active series.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi

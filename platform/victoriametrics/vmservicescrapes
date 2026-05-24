@@ -1,0 +1,83 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# VMServiceScrape CRs — declarative scrape targets.
+#
+# Each CR tells vmagent: "find Services with this label, on this port, and
+# scrape their /metrics endpoint." vmagent watches the API for these and
+# updates its scrape config automatically.
+#
+# We declare four scrapes:
+#   1. vm-operator itself — emits operator metrics.
+#   2. vmsingle — emits database metrics (write rate, query latency, etc.).
+#   3. vmagent — emits scraper metrics (targets up/down, scrape duration).
+#   4. Loki — emits log-store metrics (ingestion rate, query rate, etc.).
+#
+# CNPG operator's metrics live behind a PodMonitor CRD we don't have yet;
+# we'll add a VMPodScrape for it later, or flip on PodMonitor support.
+# ──────────────────────────────────────────────────────────────────────────────
+
+---
+# Scrape: vm-operator's own /metrics endpoint
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: vm-operator
+  namespace: observability
+spec:
+  namespaceSelector:
+    matchNames:
+      - vm-operator-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: victoria-metrics-operator
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+
+---
+# Scrape: vmsingle's metrics about itself
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: vmsingle
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vmsingle
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+
+---
+# Scrape: vmagent's metrics about itself
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: vmagent
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vmagent
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+
+---
+# Scrape: Loki's /metrics endpoint
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: loki
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+  endpoints:
+    - port: http-metrics
+      path: /metrics
+      interval: 30s
