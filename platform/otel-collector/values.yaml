@@ -1,0 +1,144 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Values for the OpenTelemetry Collector chart.
+#
+# Chart source:    https://github.com/open-telemetry/opentelemetry-helm-charts/tree/main/charts/opentelemetry-collector
+# Upstream values: helm show values open-telemetry/opentelemetry-collector --version 0.156.2
+#
+# What this chart installs (with our overrides):
+#   - One OTEL Collector pod (Deployment mode), running otelcol-contrib.
+#   - A ConfigMap with the collector config (data.relay block).
+#   - A Service exposing OTLP gRPC (4317) and HTTP (4318) for app telemetry.
+#   - A ServiceAccount (no special RBAC needed for our pipeline shape).
+#
+# Architecture:
+#   This is the central telemetry pipeline. Apps push OTLP → collector
+#   → fan out to three sinks:
+#     - Logs    → Loki    (via Loki HTTP push)
+#     - Metrics → VMSingle (via Prometheus remote-write)
+#     - Traces  → Tempo   (via OTLP gRPC)
+#
+#   The collector ALSO self-scrapes its own /metrics endpoint via the
+#   prometheus receiver, so collector health metrics flow into VMSingle.
+#
+# Why otelcol-contrib (not core or k8s distribution):
+#   - Core has no Loki exporter and no Prometheus remote-write exporter.
+#   - K8s distribution is curated for k8s use cases but support for Loki
+#     exporter is uneven across versions.
+#   - Contrib bundles everything we need. Slightly larger image (~250MB
+#     vs ~150MB for core) but for one pod, irrelevant.
+#
+# Why we keep `debug` exporters in every pipeline:
+#   During the initial deploy and verification, the debug exporter writes
+#   every span/log/metric to the collector's stdout. This lets us:
+#     - kubectl logs the collector and see whether telemetry is flowing.
+#     - Confirm pipelines work end-to-end without depending on the sinks.
+#   Once trust is established (next iteration), remove debug from the
+#   pipelines to reduce log volume.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Deployment mode — single central collector pod.
+# Apps OTLP-export to it. A DaemonSet mode would scrape node-local logs;
+# we defer that until we want cluster log collection (separate decision).
+mode: deployment
+
+image:
+  # otelcol-contrib has Loki exporter, prometheusremotewrite exporter,
+  # OTLP receivers + exporters, and the prometheus receiver for self-scrape.
+  repository: otel/opentelemetry-collector-contrib
+  # Tag intentionally omitted — chart pins to its appVersion (0.152.0).
+
+# Single replica for the learning cluster.
+replicaCount: 1
+
+# Resource sizing. The collector batches and forwards; CPU is bursty during
+# flushes, memory is bounded by batch sizes + buffered queues.
+# 256Mi request / 512Mi limit handles thousands of spans/sec comfortably.
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+# ─── Collector config ─────────────────────────────────────────────────────────
+# This block deep-merges with the chart's default config. Notes:
+#   - The chart's defaults already include otlp + jaeger + zipkin receivers,
+#     prometheus self-scrape, batch + memory_limiter processors, and a debug
+#     exporter. We keep what's useful, null out what isn't, add our sinks.
+#   - Pipeline `exporters:` and `receivers:` lists REPLACE the chart defaults
+#     (Helm doesn't merge lists). Write the full list you want.
+config:
+
+  receivers:
+    # OTLP (gRPC + HTTP) — inherited from chart defaults. Our apps push here.
+    # No override needed; chart binds correctly to MY_POD_IP.
+
+    # Prometheus self-scrape — inherited from chart defaults. Collector's own
+    # /metrics gets scraped on :8888 → flows into VMSingle via the metrics
+    # pipeline below. This gives us observability ON the observability stack.
+
+    # Remove receivers we don't use. The collector binds these ports otherwise.
+    jaeger: null
+    zipkin: null
+
+  exporters:
+    # Loki push endpoint. The `loki` exporter speaks Loki's HTTP push API.
+    loki:
+      endpoint: http://loki.observability.svc.cluster.local:3100/loki/api/v1/push
+
+    # VictoriaMetrics speaks the Prometheus remote-write protocol. The OTEL
+    # `prometheusremotewrite` exporter handles that. Endpoint is VMSingle's
+    # write port (8429), NOT the query port (8428).
+    prometheusremotewrite:
+      endpoint: http://vmsingle-vmsingle.observability.svc.cluster.local:8429/api/v1/write
+      tls:
+        insecure: true
+
+    # Tempo speaks OTLP gRPC natively on 4317.
+    # The `otlp/tempo` name uses the slash-suffix convention to distinguish
+    # this exporter instance from any future OTLP exporter targeting elsewhere.
+    otlp/tempo:
+      endpoint: tempo.observability.svc.cluster.local:4317
+      tls:
+        insecure: true
+
+    # debug exporter inherited from chart defaults. Keep it; we'll use it
+    # for initial verification ("are spans actually arriving?").
+
+  service:
+    # Health check extension — inherited from chart. Required for the
+    # collector's readiness and liveness probes. Keep it explicit.
+    extensions:
+      - health_check
+
+    pipelines:
+      logs:
+        receivers:
+          - otlp
+        processors:
+          - memory_limiter
+          - batch
+        exporters:
+          - loki
+          - debug
+
+      metrics:
+        receivers:
+          - otlp
+          - prometheus     # self-scrape of the collector's own /metrics
+        processors:
+          - memory_limiter
+          - batch
+        exporters:
+          - prometheusremotewrite
+          - debug
+
+      traces:
+        receivers:
+          - otlp
+        processors:
+          - memory_limiter
+          - batch
+        exporters:
+          - otlp/tempo
+          - debug

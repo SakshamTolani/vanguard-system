@@ -1,0 +1,44 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# ArgoCD Application: otel-collector
+#
+# Deploys OpenTelemetry Collector in deployment mode as the central
+# telemetry pipeline. Apps push OTLP here; collector fans out to three sinks.
+#
+# Wave 2: depends on all three Wave 1 sinks (Loki, VMSingle, Tempo).
+# Without these, the collector's exporters would log "connection refused"
+# in a loop until they came up. Since they're all up first, OTEL starts
+# cleanly with all pipelines functional.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: otel-collector
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+
+  sources:
+    - repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+      chart: opentelemetry-collector
+      targetRevision: 0.156.2
+      helm:
+        valueFiles:
+          - $values/platform/otel-collector/values.yaml
+
+    - repoURL: https://github.com/SakshamTolani/vanguard-system.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
