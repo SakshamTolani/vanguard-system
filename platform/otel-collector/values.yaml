@@ -121,7 +121,7 @@ config:
           - memory_limiter
           - batch
         exporters:
-          - loki
+          - otlphttp/loki
           - debug
 
       metrics:
