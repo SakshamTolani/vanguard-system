@@ -83,6 +83,8 @@ spec:
       interval: 30s
 
 
+---
+# Scrape: Tempo's /metrics endpoint
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMServiceScrape
 metadata:
@@ -93,6 +95,6 @@ spec:
     matchLabels:
       app.kubernetes.io/name: tempo
   endpoints:
-    - port: http-metrics
+    - port: tempo-prom-metrics
       path: /metrics
       interval: 30s
