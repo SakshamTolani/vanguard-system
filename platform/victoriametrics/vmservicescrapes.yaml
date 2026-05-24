@@ -35,38 +35,6 @@ spec:
       interval: 30s
 
 ---
-# Scrape: vmsingle's metrics about itself
-apiVersion: operator.victoriametrics.com/v1beta1
-kind: VMServiceScrape
-metadata:
-  name: vmsingle
-  namespace: observability
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: vmsingle
-  endpoints:
-    - port: http
-      path: /metrics
-      interval: 30s
-
----
-# Scrape: vmagent's metrics about itself
-apiVersion: operator.victoriametrics.com/v1beta1
-kind: VMServiceScrape
-metadata:
-  name: vmagent
-  namespace: observability
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: vmagent
-  endpoints:
-    - port: http
-      path: /metrics
-      interval: 30s
-
----
 # Scrape: Loki's /metrics endpoint
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMServiceScrape
