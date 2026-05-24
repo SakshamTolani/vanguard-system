@@ -7,19 +7,28 @@
 # What this chart installs (with our overrides):
 #   - One Tempo StatefulSet in SingleBinary mode.
 #   - A PVC for traces and WAL.
-#   - A Service exposing OTLP receivers (4317 gRPC, 4318 HTTP) and the
-#     query API (3200).
+#   - A Service exposing all of Tempo's default receiver ports.
+#     We accept this; OTLP-only intent is enforced by the OTEL collector's
+#     exporter config (wave 2), not by Tempo's receiver list.
 #
-# What this chart does NOT install (chart is genuinely minimal):
+# What this chart does NOT install:
 #   - No memcached, no gateway, no canary, no metrics-generator.
-#   - Render shows only StatefulSet + Service + ServiceAccount + ConfigMap.
+#
+# Why we don't override `tempo.receivers`:
+#   The chart's service.yaml template walks .Values.tempo.receivers.jaeger.*
+#   unconditionally. Setting jaeger: null or {} causes a nil-pointer error
+#   during render. Selectively nulling subkeys doesn't disable the ports.
+#   The cost of fighting this isn't worth the benefit (4 unused listeners,
+#   minimal resource cost). Accept the default; rely on OTEL collector to
+#   send traces only via OTLP.
 #
 # Inherited from chart defaults (verified, not overridden):
-#   - replicas: 1                       (single binary mode)
-#   - tempo.multitenancyEnabled: false  (single-tenant cluster)
-#   - tempo.metricsGenerator.enabled: false  (we use VM for metrics)
+#   - replicas: 1
+#   - tempo.multitenancyEnabled: false
+#   - tempo.metricsGenerator.enabled: false
 #   - tempo.storage.trace.backend: local with /var/tempo/{traces,wal}
-#   - persistence.size: 10Gi            (already matches our standard)
+#   - tempo.receivers: all (jaeger, opencensus, otlp) — see note above
+#   - persistence.size: 10Gi
 #   - persistence.accessModes: [ReadWriteOnce]
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -29,21 +38,6 @@ tempo:
 
   # Retention: 30 days, symmetric with Loki and VMSingle.
   retention: 720h
-
-  # Receivers: OTLP only.
-  # Default ships Jaeger (4 protocols), OpenCensus, AND OTLP — 7 receivers total.
-  # Our entire telemetry path is OTLP via the OTEL collector. Disable the rest
-  # so we don't bind ports we won't use and don't expose unused attack surface.
-  receivers:
-    jaeger: null
-    opencensus: null
-    zipkin: null
-    otlp:
-      protocols:
-        grpc:
-          endpoint: "0.0.0.0:4317"
-        http:
-          endpoint: "0.0.0.0:4318"
 
   # Resource sizing for the Tempo pod.
   resources:
