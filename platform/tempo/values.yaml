@@ -1,0 +1,38 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Values for the Tempo chart (community edition).
+#
+# Chart source:    https://github.com/grafana-community/helm-charts/tree/main/charts/tempo
+# Upstream values: helm show values grafana-community/tempo --version 2.1.2
+#
+# What this chart installs (with our overrides):
+#   - One Tempo StatefulSet in SingleBinary mode.
+#   - A PVC for traces and WAL.
+#   - A Service exposing OTLP receivers (4317 gRPC, 4318 HTTP) and the
+#     query API (3200).
+#
+# What this chart does NOT install (chart is genuinely minimal):
+#   - No memcached, no gateway, no canary, no metrics-generator.
+#   - Render shows only StatefulSet + Service + ServiceAccount + ConfigMap.
+#
+# Inherited from chart defaults (verified, not overridden):
+#   - replicas: 1                       (single binary mode)
+#   - tempo.multitenancyEnabled: false  (single-tenant cluster)
+#   - tempo.metricsGenerator.enabled: false  (we use VM for metrics)
+#   - tempo.storage.trace.backend: local with /var/tempo/{traces,wal}
+#   - persistence.size: 10Gi            (already matches our standard)
+#   - persistence.accessModes: [ReadWriteOnce]
+# ──────────────────────────────────────────────────────────────────────────────
+
+tempo:
+  # Phone-home off, same discipline as Loki and VM.
+  # Production observability stacks should not report shape data to vendors.
+  reportingEnabled: false
+
+  # Retention: 30 days, symmetric with Loki and VMSingle.
+  # Tempo retention is enforced by the compactor; older blocks are dropped.
+  retention: 720h
+
+  # Receivers: OTLP only.
+  # Default ships Jaeger (4 protocols), OpenCensus, AND OTLP — 7 receivers total.
+  # Our entire telemetry path is OTLP via the OTEL collector. Disable the rest
+  # so we

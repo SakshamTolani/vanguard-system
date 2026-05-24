@@ -1,0 +1,44 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# ArgoCD Application: tempo
+#
+# Deploys Tempo in SingleBinary mode as the cluster's trace store.
+# Third of three observability sinks (Loki for logs, VMSingle for metrics,
+# Tempo for traces). All three are wave 1 — wave 2 components (OTEL collector,
+# Grafana) consume them.
+#
+# Chart was migrated to grafana-community/helm-charts on Jan 30, 2026.
+# The old grafana/tempo chart is deprecated; we pin to the community version.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tempo
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+
+  sources:
+    - repoURL: https://grafana-community.github.io/helm-charts
+      chart: tempo
+      targetRevision: 2.1.2
+      helm:
+        valueFiles:
+          - $values/platform/tempo/values.yaml
+
+    - repoURL: https://github.com/<your-user-or-org>/<your-repo>.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
