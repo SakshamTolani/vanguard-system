@@ -25,14 +25,34 @@
 
 tempo:
   # Phone-home off, same discipline as Loki and VM.
-  # Production observability stacks should not report shape data to vendors.
   reportingEnabled: false
 
   # Retention: 30 days, symmetric with Loki and VMSingle.
-  # Tempo retention is enforced by the compactor; older blocks are dropped.
   retention: 720h
 
   # Receivers: OTLP only.
   # Default ships Jaeger (4 protocols), OpenCensus, AND OTLP — 7 receivers total.
   # Our entire telemetry path is OTLP via the OTEL collector. Disable the rest
-  # so we
+  # so we don't bind ports we won't use and don't expose unused attack surface.
+  receivers:
+    jaeger: null
+    opencensus: null
+    zipkin: null
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+
+  # Resource sizing for the Tempo pod.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+# Enable persistence so traces survive pod restarts.
+persistence:
+  enabled: true
