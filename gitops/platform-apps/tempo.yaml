@@ -27,7 +27,7 @@ spec:
         valueFiles:
           - $values/platform/tempo/values.yaml
 
-    - repoURL: https://github.com/<your-user-or-org>/<your-repo>.git
+    - repoURL: https://github.com/SakshamTolani/vanguard-system.git
       targetRevision: main
       ref: values
 
