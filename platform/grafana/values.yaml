@@ -1,0 +1,112 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Values for Grafana (community chart).
+#
+# Chart source:    https://github.com/grafana-community/helm-charts/tree/main/charts/grafana
+# Upstream values: helm show values grafana-community/grafana --version 12.3.3
+#
+# What this chart installs (with our overrides):
+#   - One Grafana Deployment running grafana:13.0.1-security-01.
+#   - A PVC for dashboards and Grafana's internal SQLite DB.
+#   - A ConfigMap containing the datasource provisioning config.
+#   - A Secret holding the admin password (chart-generated).
+#   - A Service exposing the UI on port 80 internally (port-forward to access).
+#
+# Architecture:
+#   Grafana queries the three observability sinks deployed in wave 1:
+#     - VictoriaMetrics (Prometheus-compatible, query port 8428)
+#     - Loki            (logs, HTTP 3100)
+#     - Tempo           (traces, HTTP 3200)
+#
+#   Tempo-Loki correlation: clicking a trace ID in a Loki log will jump
+#   to the corresponding trace in Tempo. Configured via the `derivedFields`
+#   on the Loki datasource and `tracesToLogsV2` on the Tempo datasource.
+#
+# What this chart does NOT install (chart is genuinely minimal):
+#   - No Ingress.    Access via `kubectl port-forward` for now.
+#   - No ServiceMonitor / PodMonitor (we use VMServiceScrape if we want
+#     Grafana's own metrics scraped — added separately, not here).
+#
+# Inherited from chart defaults (verified, not overridden):
+#   - replicas: 1
+#   - admin password auto-generated, stored in Secret `grafana`
+#   - service.type: ClusterIP, port 80 → containerPort 3000
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── Persistence ──────────────────────────────────────────────────────────────
+# 5GiB PVC for Grafana's internal SQLite (dashboards, users, settings).
+# Without this, every pod restart wipes saved dashboards.
+persistence:
+  enabled: true
+  size: 5Gi
+  # storageClassName inherits cluster default (kind's local-path-provisioner).
+
+# ─── Resource sizing ──────────────────────────────────────────────────────────
+# Grafana itself is lightweight when idle; bursts on dashboard loads.
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+# ─── Datasource provisioning ──────────────────────────────────────────────────
+# Provisions the three datasources at Grafana startup. Saves us from clicking
+# through the UI manually. The provisioning system is idempotent — Grafana
+# applies these definitions every restart, so the datasources can't drift.
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+
+      # VictoriaMetrics is Prometheus-compatible — Grafana treats it as
+      # a `prometheus` type datasource. Query port is 8428, NOT 8429
+      # (8429 is write-only).
+      - name: VictoriaMetrics
+        type: prometheus
+        uid: victoriametrics
+        access: proxy
+        url: http://vmsingle-vmsingle.observability.svc.cluster.local:8428
+        isDefault: true
+        editable: false   # provisioned datasources should not be edited via UI
+        jsonData:
+          timeInterval: 30s   # matches vmagent scrape_interval
+
+      # Loki for logs.
+      - name: Loki
+        type: loki
+        uid: loki
+        access: proxy
+        url: http://loki.observability.svc.cluster.local:3100
+        editable: false
+        jsonData:
+          # Correlation: when Loki returns a log line containing "trace_id=XXX",
+          # Grafana extracts that ID and renders a button to jump to Tempo.
+          derivedFields:
+            - name: TraceID
+              # Match trace_id=<hex> patterns in log bodies.
+              matcherRegex: 'trace_id=(\w+)'
+              datasourceUid: tempo
+              url: '$${__value.raw}'
+
+      # Tempo for traces.
+      - name: Tempo
+        type: tempo
+        uid: tempo
+        access: proxy
+        url: http://tempo.observability.svc.cluster.local:3200
+        editable: false
+        jsonData:
+          # Correlation: from a span in Tempo, find the logs around it
+          # using the service.name attribute and a time window.
+          tracesToLogsV2:
+            datasourceUid: loki
+            spanStartTimeShift: '-30s'
+            spanEndTimeShift: '30s'
+            tags:
+              - key: service.name
+                value: service_name
+            filterByTraceID: false
+            filterBySpanID: false
+          # Service graph from trace data (will populate once apps emit traces).
+          serviceMap:
+            datasourceUid: victoriametrics
