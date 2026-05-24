@@ -78,6 +78,13 @@ config:
     # pipeline below. This gives us observability ON the observability stack.
 
     # Remove receivers we don't use. The collector binds these ports otherwise.
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+    
     jaeger: null
     zipkin: null
 
