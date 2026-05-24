@@ -81,3 +81,18 @@ spec:
     - port: http-metrics
       path: /metrics
       interval: 30s
+
+
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: tempo
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tempo
+  endpoints:
+    - port: http-metrics
+      path: /metrics
+      interval: 30s
