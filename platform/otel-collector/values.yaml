@@ -83,8 +83,10 @@ config:
 
   exporters:
     # Loki push endpoint. The `loki` exporter speaks Loki's HTTP push API.
-    loki:
-      endpoint: http://loki.observability.svc.cluster.local:3100/loki/api/v1/push
+    otlphttp/loki:
+      endpoint: http://loki.observability.svc.cluster.local:3100/otlp
+      tls:
+        insecure: true
 
     # VictoriaMetrics speaks the Prometheus remote-write protocol. The OTEL
     # `prometheusremotewrite` exporter handles that. Endpoint is VMSingle's
