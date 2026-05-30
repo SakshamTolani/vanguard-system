@@ -1,0 +1,134 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Values for the Temporal Helm chart.
+#
+# Chart source:    https://github.com/temporalio/helm-charts/tree/main/charts/temporal
+# Upstream values: helm show values temporal/temporal --version 1.1.1
+#
+# What this chart installs (with our overrides):
+#   - 4 Deployments: frontend, history, matching, worker (the core Temporal services).
+#   - 1 Deployment for the Web UI.
+#   - 1 admintools pod (sidecar with tctl for ops tasks).
+#   - 1 schema migration Job (creates Temporal's tables on first deploy).
+#   - 6 Services + 3 ConfigMaps.
+#
+# Architecture:
+#   - Persistence: external CNPG Postgres (cluster: temporal-postgres).
+#     - default store      → temporal database (workflow state, history).
+#     - visibility store   → temporal_visibility database (listing/search).
+#   - Both datastores use the SAME Postgres cluster, different databases.
+#   - Credentials: CNPG-generated secret `temporal-postgres-app` (key: password).
+#
+# What this chart does NOT install (we explicitly disable):
+#   - Bundled Cassandra (off because we use SQL).
+#   - Bundled Prometheus / Grafana (we have our own platform observability).
+#   - Bundled Elasticsearch (visibility goes to Postgres, not ES).
+#
+# Inherited from chart defaults (verified, not overridden):
+#   - frontend / history / matching / worker enabled
+#   - internal-frontend disabled
+#   - Web UI enabled
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Values for Temporal Helm chart 1.1.1, based on the official PostgreSQL example:
+# https://github.com/temporalio/helm-charts/blob/main/charts/temporal/values/values.postgresql.yaml
+#
+# Persistence:  external CNPG Postgres in temporal namespace.
+# Both default and visibility datastores share one Postgres cluster,
+# different databases (temporal and temporal_visibility).
+# Credentials come from CNPG-generated secret `temporal-postgres-app`.
+# ──────────────────────────────────────────────────────────────────────────────
+
+server:
+  config:
+    persistence:
+      defaultStore: default
+      visibilityStore: visibility
+      numHistoryShards: 512
+
+      datastores:
+        default:
+          sql:
+            pluginName: postgres12
+            driverName: postgres12
+            databaseName: temporal
+            connectAddr: "temporal-postgres-rw.temporal.svc.cluster.local:5432"
+            connectProtocol: "tcp"
+            user: temporal
+            existingSecret: temporal-postgres-app
+            # secretKey defaults to "password" — matches CNPG's secret key.
+            manageSchema: true
+            maxConns: 20
+            maxIdleConns: 20
+            maxConnLifetime: "1h"
+
+        visibility:
+          sql:
+            pluginName: postgres12
+            driverName: postgres12
+            databaseName: temporal_visibility
+            connectAddr: "temporal-postgres-rw.temporal.svc.cluster.local:5432"
+            connectProtocol: "tcp"
+            user: temporal
+            existingSecret: temporal-postgres-app
+            manageSchema: true
+            maxConns: 10
+            maxIdleConns: 10
+            maxConnLifetime: "1h"
+
+    # ─── Auto-create a default namespace ─────────────────────────────────
+    # Chart default is `create: false`. Without this, you'd need to run
+    # `tctl namespace register default` after deploy. Enabling auto-create
+    # makes the cluster usable immediately for testing.
+    namespaces:
+      create: true
+      namespace:
+        - name: default
+          retention: 3d   # workflow history retention
+
+  # ─── Resource sizing per Temporal service ────────────────────────────────
+  # Each of frontend/history/matching/worker gets these resources.
+  # Modest sizing for a learning cluster; Temporal is light at low workflow rates.
+  frontend:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        memory: 384Mi
+
+  history:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        memory: 384Mi
+
+  matching:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+
+  worker:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+
+# ─── Web UI ──────────────────────────────────────────────────────────────────
+# Temporal's web UI for inspecting workflows. Default enabled, port 8080.
+# We'll port-forward to access; no Ingress for now.
+web:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi

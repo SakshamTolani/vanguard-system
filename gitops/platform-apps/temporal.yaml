@@ -1,0 +1,42 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# ArgoCD Application: temporal
+#
+# Deploys Temporal workflow engine, using the CNPG Postgres cluster from wave 1
+# (temporal-postgres) as its persistence backend.
+#
+# Wave 2: depends on temporal-postgres (wave 1) being healthy and having both
+# `temporal` and `temporal_visibility` databases created.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: temporal
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+
+  sources:
+    - repoURL: https://go.temporal.io/helm-charts
+      chart: temporal
+      targetRevision: 1.1.1
+      helm:
+        valueFiles:
+          - $values/platform/temporal/values.yaml
+
+    - repoURL: https://github.com/SakshamTolani/vanguard-system.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: temporal
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
