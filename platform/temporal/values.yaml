@@ -72,6 +72,7 @@ server:
             connectProtocol: "tcp"
             user: temporal
             existingSecret: temporal-postgres-app
+            createDatabase: false       # ← add this
             manageSchema: true
             maxConns: 10
             maxIdleConns: 10
