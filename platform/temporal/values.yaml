@@ -57,6 +57,7 @@ server:
             user: temporal
             existingSecret: temporal-postgres-app
             # secretKey defaults to "password" — matches CNPG's secret key.
+            createDatabase: false       # ← add this
             manageSchema: true
             maxConns: 20
             maxIdleConns: 20
