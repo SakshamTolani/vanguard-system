@@ -1,0 +1,36 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# ArgoCD Application: temporal-postgres
+#
+# Applies the CNPG Cluster CR for Temporal's database. CNPG operator (wave 0)
+# manages the actual Postgres pods, PVC, Services, and Secrets.
+#
+# Wave 1: produces the database that Temporal (wave 2) consumes.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: temporal-postgres
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/SakshamTolani/vanguard-system.git
+    targetRevision: main
+    path: platform/temporal-postgres
+    directory:
+      recurse: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: temporal
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
