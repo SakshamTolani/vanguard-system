@@ -113,3 +113,33 @@ datasources:
           # Service graph from trace data (will populate once apps emit traces).
           serviceMap:
             datasourceUid: victoriametrics
+
+
+
+# ─── Dashboard provisioning ──────────────────────────────────────────────────
+# Configures Grafana to load dashboards from /var/lib/grafana/dashboards/.
+# The chart's download-dashboards init container fetches the JSON from URLs
+# defined under `dashboards:` below into that directory at pod startup.
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: 'temporal'
+        orgId: 1
+        folder: 'Temporal'
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/temporal
+
+# ─── Dashboards ──────────────────────────────────────────────────────────────
+# JSON fetched at pod startup by the chart's init container.
+# `datasource: VictoriaMetrics` rewrites the dashboard's datasource refs
+# to point at our provisioned VictoriaMetrics datasource (matches the
+# `name:` of the entry in `datasources.yaml` above).
+dashboards:
+  temporal:
+    server-general:
+      url: https://raw.githubusercontent.com/temporalio/dashboards/master/server/server-general.json
+      datasource: VictoriaMetrics
