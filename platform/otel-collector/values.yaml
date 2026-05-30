@@ -90,7 +90,7 @@ config:
 
   exporters:
     # Loki push endpoint. The `loki` exporter speaks Loki's HTTP push API.
-    otlphttp/loki:
+    otlp_http/loki:
       endpoint: http://loki.observability.svc.cluster.local:3100/otlp
       tls:
         insecure: true
@@ -104,9 +104,9 @@ config:
         insecure: true
 
     # Tempo speaks OTLP gRPC natively on 4317.
-    # The `otlp/tempo` name uses the slash-suffix convention to distinguish
+    # The `otlp_grpc/tempo` name uses the slash-suffix convention to distinguish
     # this exporter instance from any future OTLP exporter targeting elsewhere.
-    otlp/tempo:
+    otlp_grpc/tempo:
       endpoint: tempo.observability.svc.cluster.local:4317
       tls:
         insecure: true
@@ -128,7 +128,7 @@ config:
           - memory_limiter
           - batch
         exporters:
-          - otlphttp/loki
+          - otlp_http/loki
           - debug
 
       metrics:
@@ -149,5 +149,5 @@ config:
           - memory_limiter
           - batch
         exporters:
-          - otlp/tempo
+          - otlp_grpc/tempo
           - debug
