@@ -40,6 +40,9 @@ persistence:
   size: 5Gi
   # storageClassName inherits cluster default (kind's local-path-provisioner).
 
+initChownData:
+  enabled: false
+
 # ─── Resource sizing ──────────────────────────────────────────────────────────
 # Grafana itself is lightweight when idle; bursts on dashboard loads.
 resources:
