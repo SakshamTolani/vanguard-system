@@ -1,0 +1,35 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# ArgoCD Application: temporal-monitoring
+#
+# Applies the VMServiceScrape CR that tells VMAgent to scrape Temporal's
+# /metrics endpoints. Wave 2: depends on Temporal (wave 2) being deployed
+# AND VMAgent (wave 1) being operational. Both are already up.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: temporal-monitoring
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/SakshamTolani/vanguard-system.git
+    targetRevision: main
+    path: platform/temporal-monitoring
+    directory:
+      recurse: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: temporal
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

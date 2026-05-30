@@ -1,0 +1,35 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# VMServiceScrape for Temporal server-side metrics.
+#
+# Targets: all Temporal Services that expose a port named `metrics`.
+# In practice this matches the four headless services:
+#   temporal-frontend-headless, temporal-history-headless,
+#   temporal-matching-headless, temporal-worker-headless
+#
+# Why headless: Temporal's chart puts /metrics on the headless services
+# (used for internal gossip + observability), while the main `temporal-frontend`
+# service is client-facing (gRPC API, no metrics port).
+#
+# Why `port: metrics` is the filter: Selecting only ports named "metrics"
+# auto-excludes the main client-facing services and the web UI — they don't
+# have a metrics port, so they're skipped without explicit exclusion logic.
+#
+# Scrape interval: 30s, matching our cluster default.
+# Path: /metrics (default).
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: temporal
+  namespace: temporal
+spec:
+  namespaceSelector:
+    matchNames:
+      - temporal
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: temporal
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scheme: http
