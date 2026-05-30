@@ -13,6 +13,8 @@ spec:
     initdb:
       database: temporal
       owner: temporal
+      postInitSQL:
+        - CREATE DATABASE temporal_visibility OWNER temporal;
 
   storage:
     size: 10Gi
